@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round of 32 — Prediction League</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FBFAF7;
+    --ink:#14171C;
+    --muted:#6B7079;
+    --line:#E4E1D8;
+    --card:#FFFFFF;
+    --accent:#E5482E;   /* match-ball red */
+    --good:#1E7A46;     /* correct */
+    --bad:#C9C6BD;       /* wrong / faded */
+    --pend:#D8D4C8;     /* pending */
+    --shadow:0 1px 0 var(--line), 0 8px 24px rgba(20,23,28,.05);
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:Archivo,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    line-height:1.4;-webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:"Space Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+  .wrap{max-width:980px;margin:0 auto;padding:24px 18px 64px}
+
+  /* Header / scoreboard strip */
+  header{border-top:3px solid var(--ink);padding-top:14px}
+  .eyebrow{display:flex;align-items:center;gap:10px;font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--muted);font-weight:700}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
+  h1{font-weight:900;font-size:clamp(30px,7vw,58px);line-height:.95;letter-spacing:-.02em;margin:8px 0 4px;text-transform:uppercase}
+  .sub{color:var(--muted);font-size:15px;max-width:46ch}
+
+  /* Leader hero */
+  .leader{margin:26px 0 10px;background:var(--ink);color:var(--paper);border-radius:14px;
+    padding:22px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .leader .lbl{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#A9ADB6;font-weight:700}
+  .leader .who{font-weight:900;font-size:clamp(26px,6vw,42px);text-transform:uppercase;letter-spacing:-.01em;line-height:1}
+  .leader .pts{text-align:right}
+  .leader .pts b{font-size:clamp(40px,11vw,72px);line-height:.8;color:#fff}
+  .leader .pts span{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#A9ADB6;margin-top:6px}
+  .tie{font-size:13px;color:#A9ADB6;width:100%;margin-top:4px}
+
+  h2{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+    font-weight:800;margin:34px 0 12px;border-bottom:1px solid var(--line);padding-bottom:8px}
+
+  /* Standings */
+  .stand{display:grid;gap:8px}
+  .row{display:grid;grid-template-columns:30px 1fr auto auto;align-items:center;gap:14px;
+    background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
+  .rank{font-weight:900;color:var(--accent);font-size:18px;text-align:center}
+  .name{font-weight:800;font-size:18px}
+  .bar{height:8px;background:#EFEDE6;border-radius:99px;overflow:hidden;min-width:90px}
+  .bar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .5s ease}
+  .score b{font-size:22px}
+  .score span{color:var(--muted);font-size:12px}
+
+  /* Controls */
+  .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
+  button{font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;border-radius:8px;
+    border:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:9px 14px}
+  button.ghost{background:transparent;color:var(--ink)}
+  button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  .status{font-size:12px;color:var(--muted)}
+  .status .err{color:var(--accent);font-weight:700}
+
+  /* Matches */
+  .matches{display:grid;gap:10px}
+  .match{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
+  .mtop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .teams{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px;flex-wrap:wrap}
+  .teams .vs{color:var(--muted);font-weight:700;font-size:12px}
+  .win{color:var(--good)}
+  .out{color:var(--bad);text-decoration:line-through}
+  .res{font-size:13px;color:var(--muted);text-align:right;white-space:nowrap}
+  .res .sc{font-weight:700;color:var(--ink)}
+  .pks{font-size:11px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+  .picks{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+  .pick{font-size:12px;font-weight:700;border-radius:99px;padding:4px 10px;border:1px solid var(--line);
+    display:inline-flex;align-items:center;gap:6px;background:#FAF8F2}
+  .pick .pn{color:var(--muted);font-weight:700}
+  .pick.ok{background:#E9F4ED;border-color:#BFE2CC}
+  .pick.ok .mk{color:var(--good)}
+  .pick.no{opacity:.62}
+  .pick.no .mk{color:var(--accent)}
+  .pick .mk{font-weight:900}
+
+  /* Edit mode */
+  .edit{display:none;gap:8px;margin-top:11px;flex-wrap:wrap;align-items:center}
+  body.editing .edit{display:flex}
+  .edit button{padding:7px 10px;font-size:12px;background:transparent;color:var(--ink);border:1px dashed var(--muted)}
+  .edit button.sel{background:var(--good);border-color:var(--good);color:#fff;border-style:solid}
+  .edit .hint{font-size:11px;color:var(--muted)}
+
+  footer{margin-top:40px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+  footer a{color:var(--ink)}
+  @media (max-width:560px){
+    .row{grid-template-columns:24px 1fr auto;gap:10px}
+    .bar{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow"><span class="dot" id="livedot"></span> FIFA World Cup 2026 · Knockout pool</div>
+    <h1>Round of 32<br>Prediction League</h1>
+    <p class="sub">Four brackets, one winner. A point for every Round-of-32 tie called right. Results update on their own as matches finish.</p>
+  </header>
+
+  <section class="leader" id="leader" aria-live="polite">
+    <div>
+      <div class="lbl">Current leader</div>
+      <div class="who" id="leaderName">—</div>
+    </div>
+    <div class="pts"><b id="leaderPts">0</b><span id="leaderOf">of 16 ties</span></div>
+    <div class="tie" id="leaderTie"></div>
+  </section>
+
+  <h2>Standings</h2>
+  <div class="stand" id="standings"></div>
+
+  <div class="controls">
+    <button id="refresh">Refresh now</button>
+    <button class="ghost" id="editToggle">Set results by hand</button>
+    <span class="status" id="status">Loading results…</span>
+  </div>
+
+  <h2>The 16 ties</h2>
+  <div class="matches" id="matches"></div>
+
+  <footer>
+    Picks are scored as: the team you tapped to advance wins the tie → 1 point. Ties still level after extra time
+    (decided on penalties) are marked <b>PK</b> — tap “Set results by hand” to record who went through.
+    Results via <a href="https://www.thesportsdb.com" target="_blank" rel="noopener">TheSportsDB</a>. Times in your local zone.
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   EDIT HERE IF THE FEED EVER LOOKS WRONG
+   The page pulls live results automatically. You normally don't
+   need to touch anything. If a result is missing or wrong, the
+   easiest fix is the "Set results by hand" button on the page.
+   (Advanced: TheSportsDB's FIFA World Cup league id / season.)
+   ============================================================ */
+const LEAGUE_ID = "4429";      // TheSportsDB: FIFA World Cup
+const SEASON    = "2026";
+const API_KEY   = "123";        // free public key
+const REFRESH_MS = 5 * 60 * 1000;
+
+/* --- Teams: code -> display name + name variants the feed might use --- */
+const TEAMS = {
+  RSA:{n:"South Africa", a:["south africa"]},
+  CAN:{n:"Canada", a:["canada"]},
+  BRA:{n:"Brazil", a:["brazil"]},
+  JPN:{n:"Japan", a:["japan"]},
+  GER:{n:"Germany", a:["germany"]},
+  PAR:{n:"Paraguay", a:["paraguay"]},
+  NED:{n:"Netherlands", a:["netherlands","holland"]},
+  MAR:{n:"Morocco", a:["morocco"]},
+  CIV:{n:"Ivory Coast", a:["ivory coast","cote divoire","cote d ivoire","côte d’ivoire"]},
+  NOR:{n:"Norway", a:["norway"]},
+  FRA:{n:"France", a:["france"]},
+  SWE:{n:"Sweden", a:["sweden"]},
+  MEX:{n:"Mexico", a:["mexico"]},
+  ECU:{n:"Ecuador", a:["ecuador"]},
+  ENG:{n:"England", a:["england"]},
+  COD:{n:"DR Congo", a:["dr congo","congo dr","democratic republic of congo","congo democratic republic"]},
+  BEL:{n:"Belgium", a:["belgium"]},
+  SEN:{n:"Senegal", a:["senegal"]},
+  USA:{n:"USA", a:["usa","united states","united states of america"]},
+  BIH:{n:"Bosnia & Herzegovina", a:["bosnia and herzegovina","bosnia herzegovina","bosnia & herzegovina","bosnia"]},
+  ESP:{n:"Spain", a:["spain"]},
+  AUT:{n:"Austria", a:["austria"]},
+  POR:{n:"Portugal", a:["portugal"]},
+  CRO:{n:"Croatia", a:["croatia"]},
+  SUI:{n:"Switzerland", a:["switzerland"]},
+  ALG:{n:"Algeria", a:["algeria"]},
+  AUS:{n:"Australia", a:["australia"]},
+  EGY:{n:"Egypt", a:["egypt"]},
+  ARG:{n:"Argentina", a:["argentina"]},
+  CPV:{n:"Cape Verde", a:["cape verde","cabo verde"]},
+  COL:{n:"Colombia", a:["colombia"]},
+  GHA:{n:"Ghana", a:["ghana"]},
+};
+
+/* --- The 16 ties (home a vs away b) --- */
+const FIXTURES = [
+  {id:"m1",  a:"RSA", b:"CAN"},
+  {id:"m2",  a:"BRA", b:"JPN"},
+  {id:"m3",  a:"GER", b:"PAR"},
+  {id:"m4",  a:"NED", b:"MAR"},
+  {id:"m5",  a:"CIV", b:"NOR"},
+  {id:"m6",  a:"FRA", b:"SWE"},
+  {id:"m7",  a:"MEX", b:"ECU"},
+  {id:"m8",  a:"ENG", b:"COD"},
+  {id:"m9",  a:"BEL", b:"SEN"},
+  {id:"m10", a:"USA", b:"BIH"},
+  {id:"m11", a:"ESP", b:"AUT"},
+  {id:"m12", a:"POR", b:"CRO"},
+  {id:"m13", a:"SUI", b:"ALG"},
+  {id:"m14", a:"AUS", b:"EGY"},
+  {id:"m15", a:"ARG", b:"CPV"},
+  {id:"m16", a:"COL", b:"GHA"},
+];
+
+/* --- The four brackets: fixture id -> code picked to advance --- */
+const PREDICTORS = {
+  Tuomas:  {m1:"CAN",m2:"JPN",m3:"GER",m4:"NED",m5:"NOR",m6:"FRA",m7:"MEX",m8:"ENG",m9:"SEN",m10:"USA",m11:"ESP",m12:"CRO",m13:"SUI",m14:"AUS",m15:"ARG",m16:"COL"},
+  Lassi:   {m1:"CAN",m2:"BRA",m3:"GER",m4:"NED",m5:"NOR",m6:"FRA",m7:"MEX",m8:"ENG",m9:"SEN",m10:"BIH",m11:"ESP",m12:"CRO",m13:"SUI",m14:"EGY",m15:"ARG",m16:"COL"},
+  Matti:   {m1:"RSA",m2:"BRA",m3:"GER",m4:"NED",m5:"NOR",m6:"FRA",m7:"MEX",m8:"ENG",m9:"BEL",m10:"USA",m11:"ESP",m12:"POR",m13:"SUI",m14:"EGY",m15:"ARG",m16:"COL"},
+  Mathias: {m1:"CAN",m2:"BRA",m3:"GER",m4:"NED",m5:"NOR",m6:"FRA",m7:"MEX",m8:"ENG",m9:"BEL",m10:"USA",m11:"ESP",m12:"CRO",m13:"SUI",m14:"EGY",m15:"ARG",m16:"COL"},
+};
+
+/* ---------- helpers ---------- */
+const norm = s => (s||"").toString().toLowerCase()
+  .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  .replace(/[^a-z0-9]/g,"");
+
+// normalized alias -> code
+const ALIAS = {};
+for(const code in TEAMS){ for(const al of TEAMS[code].a){ ALIAS[norm(al)] = code; } }
+function codeFromName(name){
+  const k = norm(name);
+  if(ALIAS[k]) return ALIAS[k];
+  for(const a in ALIAS){ if(k && (k.includes(a)||a.includes(k))) return ALIAS[a]; } // loose fallback
+  return null;
+}
+// find fixture for a pair of codes
+function fixtureFor(c1,c2){
+  return FIXTURES.find(f => (f.a===c1&&f.b===c2)||(f.a===c2&&f.b===c1)) || null;
+}
+
+/* manual overrides saved on the published site */
+function loadManual(){ try{return JSON.parse(localStorage.getItem("wc26_manual")||"{}")}catch(e){return {}} }
+function saveManual(o){ try{localStorage.setItem("wc26_manual",JSON.stringify(o))}catch(e){} }
+
+let RESULTS = {};   // fixture id -> {winner, hs, as, ha:code, aa:code, pk:bool}
+let lastFetchOK = null;
+
+/* ---------- fetch + parse ---------- */
+async function fetchEvents(){
+  const base = `https://www.thesportsdb.com/api/v1/json/${API_KEY}/`;
+  const urls = [
+    `${base}eventsseason.php?id=${LEAGUE_ID}&s=${SEASON}`,
+    `${base}eventspastleague.php?id=${LEAGUE_ID}`,
+    `${base}eventsnextleague.php?id=${LEAGUE_ID}`,
+  ];
+  const seen = {}; const events = [];
+  for(const u of urls){
+    try{
+      const r = await fetch(u); if(!r.ok) continue;
+      const d = await r.json();
+      const list = (d && (d.events || d.results)) || [];
+      for(const e of (list||[])){ if(e && e.idEvent && !seen[e.idEvent]){ seen[e.idEvent]=1; events.push(e); } }
+    }catch(e){ /* try next */ }
+  }
+  return events;
+}
+
+function buildResults(events){
+  const out = {};
+  for(const e of events){
+    const ch = codeFromName(e.strHomeTeam), ca = codeFromName(e.strAwayTeam);
+    if(!ch||!ca) continue;
+    const fx = fixtureFor(ch,ca); if(!fx) continue;
+    const hs = e.intHomeScore, as = e.intAwayScore;
+    if(hs===null||hs===undefined||hs===""||as===null||as===undefined||as==="") continue; // not played yet
+    const h = parseInt(hs,10), aw = parseInt(as,10);
+    if(Number.isNaN(h)||Number.isNaN(aw)) continue;
+    let winner=null, pk=false;
+    if(h>aw) winner=ch; else if(aw>h) winner=ca; else pk=true; // level -> penalties, decide by hand
+    out[fx.id] = {winner, hs:h, as:aw, ha:ch, aa:ca, pk};
+  }
+  return out;
+}
+
+/* ---------- scoring ---------- */
+function finalWinner(fxId){
+  const man = loadManual();
+  if(man[fxId]) return man[fxId];
+  const r = RESULTS[fxId];
+  return (r && r.winner) ? r.winner : null;
+}
+function decidedCount(){ return FIXTURES.filter(f=>finalWinner(f.id)).length; }
+function scoreFor(name){
+  let pts=0; const picks=PREDICTORS[name];
+  for(const f of FIXTURES){ const w=finalWinner(f.id); if(w && picks[f.id]===w) pts++; }
+  return pts;
+}
+
+/* ---------- render ---------- */
+function teamSpan(code, winnerCode, decided){
+  const cls = !decided ? "" : (code===winnerCode ? "win" : "out");
+  return `<span class="${cls}">${TEAMS[code].n}</span>`;
+}
+
+function render(){
+  const decided = decidedCount();
+
+  // standings
+  const rows = Object.keys(PREDICTORS).map(n=>({n, p:scoreFor(n)}))
+    .sort((x,y)=> y.p-x.p || x.n.localeCompare(y.n));
+  const top = rows[0].p;
+  const leaders = rows.filter(r=>r.p===top).map(r=>r.n);
+
+  document.getElementById("leaderName").textContent =
+    leaders.length===1 ? leaders[0] : "Tied";
+  document.getElementById("leaderPts").textContent = top;
+  document.getElementById("leaderOf").textContent = `of ${decided} decided · 16 total`;
+  document.getElementById("leaderTie").textContent =
+    leaders.length>1 ? `Level at the top: ${leaders.join(" · ")}` :
+    (decided<16 ? `${16-decided} ${16-decided===1?"tie":"ties"} still to play` : "All ties decided");
+
+  const maxBar = Math.max(top,1);
+  document.getElementById("standings").innerHTML = rows.map((r,i)=>`
+    <div class="row">
+      <div class="rank">${i+1}</div>
+      <div class="name">${r.n}</div>
+      <div class="bar"><i style="width:${(r.p/maxBar)*100}%"></i></div>
+      <div class="score"><b class="mono">${r.p}</b> <span>pts</span></div>
+    </div>`).join("");
+
+  // matches
+  document.getElementById("matches").innerHTML = FIXTURES.map(f=>{
+    const w = finalWinner(f.id);
+    const r = RESULTS[f.id];
+    const decidedM = !!w;
+    let res = `<span>Not played yet</span>`;
+    if(r){
+      const sc = `${r.hs}–${r.as}`;
+      res = `<span class="sc mono">${sc}</span>${r.pk && !loadManual()[f.id] ? ` <span class="pks">PK?</span>`:""}`;
+    } else if(w){ res = `<span class="pks">set by hand</span>`; }
+
+    const picks = Object.keys(PREDICTORS).map(n=>{
+      const pick = PREDICTORS[n][f.id];
+      let cls="", mk="·";
+      if(decidedM){ if(pick===w){cls="ok";mk="✓";} else {cls="no";mk="✕";} }
+      return `<span class="pick ${cls}"><span class="pn">${n}</span> ${TEAMS[pick].n} <span class="mk">${mk}</span></span>`;
+    }).join("");
+
+    const sel = c => finalWinner(f.id)===c ? "sel" : "";
+    return `
+      <div class="match" data-fx="${f.id}">
+        <div class="mtop">
+          <div class="teams">${teamSpan(f.a,w,decidedM)} <span class="vs">v</span> ${teamSpan(f.b,w,decidedM)}</div>
+          <div class="res">${res}</div>
+        </div>
+        <div class="picks">${picks}</div>
+        <div class="edit">
+          <span class="hint">Who went through?</span>
+          <button class="${sel(f.a)}" data-set="${f.a}">${TEAMS[f.a].n}</button>
+          <button class="${sel(f.b)}" data-set="${f.b}">${TEAMS[f.b].n}</button>
+          <button data-set="clear">Clear / use feed</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  // live dot only if a result is in but tournament not complete
+  document.getElementById("livedot").style.background = decided>0 && decided<16 ? "var(--accent)" : "var(--muted)";
+
+  // edit handlers
+  document.querySelectorAll(".match .edit button").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const fx = btn.closest(".match").dataset.fx;
+      const val = btn.dataset.set;
+      const man = loadManual();
+      if(val==="clear") delete man[fx]; else man[fx]=val;
+      saveManual(man); render();
+    });
+  });
+}
+
+/* ---------- status + load ---------- */
+function setStatus(){
+  const el = document.getElementById("status");
+  const t = new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  if(lastFetchOK===true) el.innerHTML = `Updated ${t} · auto-refreshes every 5 min`;
+  else if(lastFetchOK===false) el.innerHTML = `<span class="err">Couldn't reach the results feed.</span> Showing any hand-set results. Try Refresh.`;
+}
+
+async function update(){
+  document.getElementById("status").textContent = "Checking for results…";
+  try{
+    const events = await fetchEvents();
+    RESULTS = buildResults(events);
+    lastFetchOK = true;
+  }catch(e){
+    lastFetchOK = false;
+  }
+  render(); setStatus();
+}
+
+document.getElementById("refresh").addEventListener("click", update);
+document.getElementById("editToggle").addEventListener("click", ()=>{
+  document.body.classList.toggle("editing");
+  const on = document.body.classList.contains("editing");
+  document.getElementById("editToggle").textContent = on ? "Done setting results" : "Set results by hand";
+});
+
+render();           // show brackets immediately
+update();           // then fetch live results
+setInterval(update, REFRESH_MS);
+</script>
+</body>
+</html>
