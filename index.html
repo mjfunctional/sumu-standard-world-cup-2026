@@ -182,6 +182,53 @@ const SEASON_ALT = "2025-2026";  // and "2025-2026"; we query both so no result 
 const API_KEY   = "123";        // free public key
 const REFRESH_MS = 5 * 60 * 1000;
 
+/* ============================================================
+   ✋  SET A RESULT BY HAND  (this shows for EVERYONE on the site)
+   ------------------------------------------------------------
+   The live feed (TheSportsDB) is free and community-run, so a
+   final score can take a few hours to appear there. To post a
+   result instantly yourself, add a line below: the match id,
+   then the 3-letter code of the team that WENT THROUGH.
+   Save / re-upload index.html and everyone sees it right away.
+   (Lines starting with // are switched off — delete the // to use.)
+
+      match  home / away
+      m1   RSA South Africa / CAN Canada
+      m2   BRA Brazil       / JPN Japan
+      m3   GER Germany      / PAR Paraguay
+      m4   NED Netherlands  / MAR Morocco
+      m5   CIV Ivory Coast  / NOR Norway
+      m6   FRA France       / SWE Sweden
+      m7   MEX Mexico       / ECU Ecuador
+      m8   ENG England      / COD DR Congo
+      m9   BEL Belgium      / SEN Senegal
+      m10  USA USA          / BIH Bosnia & Herzegovina
+      m11  ESP Spain        / AUT Austria
+      m12  POR Portugal     / CRO Croatia
+      m13  SUI Switzerland  / ALG Algeria
+      m14  AUS Australia    / EGY Egypt
+      m15  ARG Argentina    / CPV Cape Verde
+      m16  COL Colombia     / GHA Ghana
+   ============================================================ */
+const RESULTS_OVERRIDE = {
+  m1: "CAN",      // South Africa 0–1 Canada (Eustáquio 90+2')
+  // m2: "BRA",
+  // m3: "GER",
+  // m4: "NED",
+  // m5: "NOR",
+  // m6: "FRA",
+  // m7: "MEX",
+  // m8: "ENG",
+  // m9: "BEL",
+  // m10: "USA",
+  // m11: "ESP",
+  // m12: "POR",
+  // m13: "SUI",
+  // m14: "EGY",
+  // m15: "ARG",
+  // m16: "COL",
+};
+
 /* --- Teams: code -> display name + name variants the feed might use --- */
 const TEAMS = {
   RSA:{n:"South Africa", a:["south africa"]},
@@ -322,10 +369,11 @@ function buildResults(events){
 
 /* ---------- scoring ---------- */
 function finalWinner(fxId){
+  if(RESULTS_OVERRIDE[fxId]) return RESULTS_OVERRIDE[fxId];   // owner-set, shared with everyone
   const man = loadManual();
-  if(man[fxId]) return man[fxId];
+  if(man[fxId]) return man[fxId];                              // tapped on this device only
   const r = RESULTS[fxId];
-  return (r && r.winner) ? r.winner : null;
+  return (r && r.winner) ? r.winner : null;                   // from the live feed
 }
 function decidedCount(){ return FIXTURES.filter(f=>finalWinner(f.id)).length; }
 function scoreFor(name){
@@ -420,11 +468,13 @@ function render(){
 function setStatus(){
   const el = document.getElementById("status");
   const t = new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
-  if(lastFetchOK===true){
-    if(matchedCount>0) el.innerHTML = `Updated ${t} · ${matchedCount} of 16 ${matchedCount===1?"result":"results"} in · auto-refreshes every 5 min`;
-    else el.innerHTML = `Updated ${t} · connected, no finished results found yet · auto-refreshes every 5 min`;
+  const dec = decidedCount();
+  if(lastFetchOK===false){
+    el.innerHTML = `<span class="err">Live feed unreachable.</span> Showing results set by hand · ${dec}/16 decided`;
+    return;
   }
-  else if(lastFetchOK===false) el.innerHTML = `<span class="err">Couldn't reach the results feed.</span> Showing any hand-set results. Try Refresh.`;
+  const feedNote = matchedCount>0 ? `feed has ${matchedCount}` : `none from feed yet`;
+  el.innerHTML = `${dec}/16 ties decided (${feedNote}) · checked ${t} · refreshes every 5 min`;
 }
 
 async function update(){
