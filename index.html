@@ -57,6 +57,16 @@
     background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
   .rank{font-weight:900;color:var(--accent);font-size:18px;text-align:center}
   .name{font-weight:800;font-size:18px}
+  .ai{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--accent);
+    border:1px solid var(--accent);border-radius:99px;padding:1px 6px;vertical-align:middle;margin-left:6px}
+  details.logic{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:0 16px;box-shadow:var(--shadow)}
+  details.logic summary{cursor:pointer;font-weight:800;font-size:14px;padding:13px 0;list-style:none}
+  details.logic summary::-webkit-details-marker{display:none}
+  details.logic summary .tag{color:var(--accent)}
+  details.logic[open] summary{border-bottom:1px solid var(--line)}
+  details.logic ul{margin:12px 0 16px;padding-left:18px}
+  details.logic li{margin:7px 0;font-size:14px;color:#33373E}
+  details.logic li b{color:var(--ink)}
   .bar{height:8px;background:#EFEDE6;border-radius:99px;overflow:hidden;min-width:90px}
   .bar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .5s ease}
   .score b{font-size:22px}
@@ -137,6 +147,20 @@
   <h2>The 16 ties</h2>
   <div class="matches" id="matches"></div>
 
+  <details class="logic">
+    <summary><span class="tag">Claude’s</span> logic on the close calls ▾</summary>
+    <ul>
+      <li><b>The approach:</b> in this 48-team format, twelve group winners mostly drew third-placed teams — real mismatches, not coin flips. So this is a deliberate trust-the-form bracket; the judgment is saved for the few ties between evenly-matched sides.</li>
+      <li><b>South Africa–Canada → Canada.</b> Near coin flip. Co-host pedigree (Davies, Jonathan David) edges it, even with Ismael Koné out injured.</li>
+      <li><b>Brazil–Japan → Brazil.</b> Vinícius has 4 goals and the Seleção are flowing under Ancelotti. Japan are dangerous, but a level below.</li>
+      <li><b>Netherlands–Morocco → Netherlands.</b> The scariest “favourite” draw on the board — Morocco were 2022 semi-finalists and held Brazil. Dutch form (5-1 over Sweden) just tips it.</li>
+      <li><b>Ivory Coast–Norway → Norway.</b> Genuine 50/50; the tactical read slightly favours Ivory Coast’s press, but Haaland’s one-game ceiling and a full-strength XI returning win out.</li>
+      <li><b>Belgium–Senegal → Belgium.</b> Aging and underwhelming in the group, but De Bruyne–Lukaku–Doku quality, and Senegal lost both their real tests (France, Norway).</li>
+      <li><b>Portugal–Croatia → Portugal.</b> The contrarian one. Croatia shipped 4 to England and lean on a 40-year-old Modrić; Portugal’s Vitinha–João Neves–Bruno midfield is the stronger engine even with Ronaldo clogging the attack.</li>
+      <li><b>Australia–Egypt → Egypt.</b> Salah’s ceiling plus a stronger group (5 points, drew Belgium).</li>
+    </ul>
+  </details>
+
   <footer>
     Picks are scored as: the team you tapped to advance wins the tie → 1 point. Ties still level after extra time
     (decided on penalties) are marked <b>PK</b> — tap “Set results by hand” to record who went through.
@@ -153,7 +177,8 @@
    (Advanced: TheSportsDB's FIFA World Cup league id / season.)
    ============================================================ */
 const LEAGUE_ID = "4429";      // TheSportsDB: FIFA World Cup
-const SEASON    = "2026";
+const SEASON    = "2026";       // TheSportsDB files the World Cup under BOTH "2026"
+const SEASON_ALT = "2025-2026";  // and "2025-2026"; we query both so no result is missed
 const API_KEY   = "123";        // free public key
 const REFRESH_MS = 5 * 60 * 1000;
 
@@ -219,7 +244,9 @@ const PREDICTORS = {
   Lassi:   {m1:"CAN",m2:"BRA",m3:"GER",m4:"NED",m5:"NOR",m6:"FRA",m7:"MEX",m8:"ENG",m9:"SEN",m10:"BIH",m11:"ESP",m12:"CRO",m13:"SUI",m14:"EGY",m15:"ARG",m16:"COL"},
   Matti:   {m1:"RSA",m2:"BRA",m3:"GER",m4:"NED",m5:"NOR",m6:"FRA",m7:"MEX",m8:"ENG",m9:"BEL",m10:"USA",m11:"ESP",m12:"POR",m13:"SUI",m14:"EGY",m15:"ARG",m16:"COL"},
   Mathias: {m1:"CAN",m2:"BRA",m3:"GER",m4:"NED",m5:"NOR",m6:"FRA",m7:"MEX",m8:"ENG",m9:"BEL",m10:"USA",m11:"ESP",m12:"CRO",m13:"SUI",m14:"EGY",m15:"ARG",m16:"COL"},
+  Claude:  {m1:"CAN",m2:"BRA",m3:"GER",m4:"NED",m5:"NOR",m6:"FRA",m7:"MEX",m8:"ENG",m9:"BEL",m10:"USA",m11:"ESP",m12:"POR",m13:"SUI",m14:"EGY",m15:"ARG",m16:"COL"},
 };
+const AI_PLAYER = "Claude";
 
 /* ---------- helpers ---------- */
 const norm = s => (s||"").toString().toLowerCase()
@@ -246,29 +273,36 @@ function saveManual(o){ try{localStorage.setItem("wc26_manual",JSON.stringify(o)
 
 let RESULTS = {};   // fixture id -> {winner, hs, as, ha:code, aa:code, pk:bool}
 let lastFetchOK = null;
+let matchedCount = 0;   // how many of our 16 ties got a finished result from the feed
 
 /* ---------- fetch + parse ---------- */
 async function fetchEvents(){
   const base = `https://www.thesportsdb.com/api/v1/json/${API_KEY}/`;
+  // The World Cup lives under two season strings on TheSportsDB and the data is
+  // entered inconsistently between them, so we pull both, plus the season-agnostic
+  // past/next league feeds, and merge everything. This is what makes older
+  // (already-played) matches show up reliably.
   const urls = [
     `${base}eventsseason.php?id=${LEAGUE_ID}&s=${SEASON}`,
+    `${base}eventsseason.php?id=${LEAGUE_ID}&s=${SEASON_ALT}`,
     `${base}eventspastleague.php?id=${LEAGUE_ID}`,
     `${base}eventsnextleague.php?id=${LEAGUE_ID}`,
   ];
-  const seen = {}; const events = [];
+  const seen = {}; const events = []; let anyOK = false;
   for(const u of urls){
     try{
-      const r = await fetch(u); if(!r.ok) continue;
+      const r = await fetch(u, {cache:"no-store"}); if(!r.ok) continue;
+      anyOK = true;
       const d = await r.json();
       const list = (d && (d.events || d.results)) || [];
       for(const e of (list||[])){ if(e && e.idEvent && !seen[e.idEvent]){ seen[e.idEvent]=1; events.push(e); } }
-    }catch(e){ /* try next */ }
+    }catch(e){ /* try next url */ }
   }
-  return events;
+  return {events, anyOK};
 }
 
 function buildResults(events){
-  const out = {};
+  const out = {}; let matched = 0;
   for(const e of events){
     const ch = codeFromName(e.strHomeTeam), ca = codeFromName(e.strAwayTeam);
     if(!ch||!ca) continue;
@@ -280,7 +314,9 @@ function buildResults(events){
     let winner=null, pk=false;
     if(h>aw) winner=ch; else if(aw>h) winner=ca; else pk=true; // level -> penalties, decide by hand
     out[fx.id] = {winner, hs:h, as:aw, ha:ch, aa:ca, pk};
+    matched++;
   }
+  matchedCount = matched;
   return out;
 }
 
@@ -325,7 +361,7 @@ function render(){
   document.getElementById("standings").innerHTML = rows.map((r,i)=>`
     <div class="row">
       <div class="rank">${i+1}</div>
-      <div class="name">${r.n}</div>
+      <div class="name">${r.n}${r.n===AI_PLAYER?' <span class="ai">AI</span>':''}</div>
       <div class="bar"><i style="width:${(r.p/maxBar)*100}%"></i></div>
       <div class="score"><b class="mono">${r.p}</b> <span>pts</span></div>
     </div>`).join("");
@@ -345,7 +381,7 @@ function render(){
       const pick = PREDICTORS[n][f.id];
       let cls="", mk="·";
       if(decidedM){ if(pick===w){cls="ok";mk="✓";} else {cls="no";mk="✕";} }
-      return `<span class="pick ${cls}"><span class="pn">${n}</span> ${TEAMS[pick].n} <span class="mk">${mk}</span></span>`;
+      return `<span class="pick ${cls}"><span class="pn">${n}${n===AI_PLAYER?'•':''}</span> ${TEAMS[pick].n} <span class="mk">${mk}</span></span>`;
     }).join("");
 
     const sel = c => finalWinner(f.id)===c ? "sel" : "";
@@ -384,16 +420,19 @@ function render(){
 function setStatus(){
   const el = document.getElementById("status");
   const t = new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
-  if(lastFetchOK===true) el.innerHTML = `Updated ${t} · auto-refreshes every 5 min`;
+  if(lastFetchOK===true){
+    if(matchedCount>0) el.innerHTML = `Updated ${t} · ${matchedCount} of 16 ${matchedCount===1?"result":"results"} in · auto-refreshes every 5 min`;
+    else el.innerHTML = `Updated ${t} · connected, no finished results found yet · auto-refreshes every 5 min`;
+  }
   else if(lastFetchOK===false) el.innerHTML = `<span class="err">Couldn't reach the results feed.</span> Showing any hand-set results. Try Refresh.`;
 }
 
 async function update(){
   document.getElementById("status").textContent = "Checking for results…";
   try{
-    const events = await fetchEvents();
-    RESULTS = buildResults(events);
-    lastFetchOK = true;
+    const {events, anyOK} = await fetchEvents();
+    if(anyOK){ RESULTS = buildResults(events); lastFetchOK = true; }
+    else { lastFetchOK = false; }
   }catch(e){
     lastFetchOK = false;
   }
